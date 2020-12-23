@@ -8,7 +8,11 @@ const BRIGHTNESS_MAX = 15
 export class Display {
     private readonly use24Time: boolean
     private readonly display: SsDisplay
+
     private minutesSinceMidnight = 0
+    private firstDot = false
+    private secondDot = false
+    private thirdDot = false
 
     constructor({
         use24Time = false,
@@ -29,8 +33,11 @@ export class Display {
         this.paint()
     }
 
-    public setTime(minutesSinceMidnight: number) {
+    public setTime(minutesSinceMidnight: number, firstDot = false, secondDot = false, thirdDot = false) {
         this.minutesSinceMidnight = minutesSinceMidnight
+        this.firstDot = firstDot
+        this.secondDot = secondDot
+        this.thirdDot = thirdDot
     }
 
     public setBrightness(zeroToOne: number) {
@@ -52,9 +59,9 @@ export class Display {
         }
         const minutes = Math.floor(this.minutesSinceMidnight % 60)
 
-        this.display.writeDigit(0, hours >= 10 ? Math.floor(hours / 10) : null)
-        this.display.writeDigit(1, hours % 10)
-        this.display.writeDigit(3, Math.floor(minutes / 10))
+        this.display.writeDigit(0, hours >= 10 ? Math.floor(hours / 10) : null, this.firstDot)
+        this.display.writeDigit(1, hours % 10, this.secondDot)
+        this.display.writeDigit(3, Math.floor(minutes / 10), this.thirdDot)
         this.display.writeDigit(4, minutes % 10, pmDot)
     }
 }

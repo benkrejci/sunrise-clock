@@ -1,5 +1,6 @@
 import { Gpio } from 'pigpio'
 import { debounce } from './decorators'
+import Timeout = NodeJS.Timeout
 
 enum COLOR_INDEX { R, G, B, W }
 type Rgbw<V = number> = [V, V, V, V]
@@ -19,11 +20,13 @@ const RGBW_KEYFRAMES: RgbwKeyframe[] = [
 ]
 
 export class Sunrise {
-    private rgbwKeyframes: RgbwKeyframe[]
+    private readonly rgbwKeyframes: RgbwKeyframe[]
     private readonly gpioByColor: Rgbw<Gpio | null> = [null, null, null, null]
 
+    private active = true
     private sunUpMinutes: Minutes = 0
     private sunriseDurationMinutes: Minutes
+    private runTimeout: Timeout | null = null
 
     constructor({
         redPin,
@@ -49,6 +52,16 @@ export class Sunrise {
         this.run()
     }
 
+    public stop() {
+        if (this.runTimeout !== null) clearTimeout(this.runTimeout)
+        this.setRgbw([0, 0, 0, 0])
+    }
+
+    public setActive(active: boolean) {
+        this.active = active
+        this.paint()
+    }
+
     public setSunUpTime(sunUpMinutes: Minutes) {
         this.sunUpMinutes = sunUpMinutes
         this.paint()
@@ -64,13 +77,18 @@ export class Sunrise {
 
         // update at top of the second
         const now = new Date()
-        setTimeout(() => {
+        this.runTimeout = setTimeout(() => {
             this.run()
         }, 1000 - now.getMilliseconds())
     }
 
     @debounce(20, 100)
     private paint(): void {
+        if (!this.active) {
+            this.setRgbw([0, 0, 0, 0])
+            return
+        }
+
         const start: Minutes = this.sunUpMinutes - this.sunriseDurationMinutes
         const now = new Date()
         let nowMinutes: Minutes = now.getHours() * 60 + now.getMinutes()
