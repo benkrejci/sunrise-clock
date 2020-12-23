@@ -33,14 +33,18 @@ export class Display {
         this.paint()
     }
 
-    public setTime(minutesSinceMidnight: number, firstDot = false, secondDot = false, thirdDot = false) {
+    public clear(): void {
+        this.display.clear()
+    }
+
+    public setTime(minutesSinceMidnight: number, firstDot = false, secondDot = false, thirdDot = false): void {
         this.minutesSinceMidnight = minutesSinceMidnight
         this.firstDot = firstDot
         this.secondDot = secondDot
         this.thirdDot = thirdDot
     }
 
-    public setBrightness(zeroToOne: number) {
+    public setBrightness(zeroToOne: number): void {
         this.display.display.setBrightness(zeroToOne * BRIGHTNESS_MAX)
     }
 

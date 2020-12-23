@@ -4,7 +4,7 @@ import { Display } from './Display'
 import { Sunrise } from './Sunrise'
 import Timeout = NodeJS.Timeout
 import { debounce } from './decorators'
-import { Gpio } from 'pigpio'
+import pigpio, { Gpio } from 'pigpio'
 
 interface ClockState { alarmTimeMinutes?: number }
 
@@ -26,6 +26,14 @@ const DEFAULT_ENCODER_MODE = 'MINUTES'
 const BUTTON_DEBOUNCE_NS = 100 * 1000
 const DAY_MINUTES = 60 * 24
 
+// the following values are taken from this table: https://github.com/fivdi/pigpio/blob/master/doc/gpio.md#pwmrangerange
+// they are chosen so as to maximize color resolution and minimize flicker
+const PWM_SAMPLE_LENGTH_US = 1
+const PWM_FREQUENCY = 1000
+const PWM_RANGE = 1000
+
+pigpio.configureClock(PWM_SAMPLE_LENGTH_US, pigpio.CLOCK_PCM)
+
 export class Clock {
     private readonly clockStateFilePath: string
     private readonly showAlarmDelayMs: number
@@ -34,8 +42,8 @@ export class Clock {
     private readonly alarmButton: Gpio
     private readonly alarmLed: Gpio
 
-    private encoderMode: null | 'MINUTES' | 'HOURS' = null
-    private encoderOffset: number = 0
+    private editMode: null | 'MINUTES' | 'HOURS' = null
+    private editOffset: number = 0
     private alarmTimeMinutes: number = DEFAULT_ALARM_MINUTES
     private showTimeTimeout: Timeout | null = null
 
@@ -80,31 +88,34 @@ export class Clock {
         })
         this.alarmButton.glitchFilter(BUTTON_DEBOUNCE_NS)
         this.alarmButton.on('alert', () => this.checkActive())
+
         this.alarmLed = new Gpio(alarmLedPin, { mode: Gpio.OUTPUT })
+        this.alarmLed.pwmFrequency(PWM_FREQUENCY)
+        this.alarmLed.pwmRange(PWM_RANGE)
 
         this.display = new Display({ displayAddress, i2cBus })
 
         const encoder = new RotaryEncoder(rotaryCwPin, rotaryCcwPin, rotaryButtonPin)
         let lastAlarmTimeMinutes: number
         encoder.on('release', () => {
-            this.encoderMode = this.encoderMode === 'MINUTES' ? 'HOURS' : 'MINUTES'
-            this.encoderOffset = 0
+            this.editMode = this.editMode === 'MINUTES' ? 'HOURS' : 'MINUTES'
+            this.editOffset = 0
             lastAlarmTimeMinutes = this.alarmTimeMinutes
 
             this.updateAlarmTime()
         })
         encoder.on('rotate', (delta) => {
-            if (this.encoderMode === null) {
-                this.encoderMode = DEFAULT_ENCODER_MODE
-                this.encoderOffset = 0
+            if (this.editMode === null) {
+                this.editMode = DEFAULT_ENCODER_MODE
+                this.editOffset = 0
                 lastAlarmTimeMinutes = this.alarmTimeMinutes
             }
-            this.encoderOffset += delta * rotarySpeed
+            this.editOffset += delta * rotarySpeed
 
-            if (this.encoderMode === 'MINUTES') {
-                this.alarmTimeMinutes = lastAlarmTimeMinutes + Math.round(this.encoderOffset)
+            if (this.editMode === 'MINUTES') {
+                this.alarmTimeMinutes = lastAlarmTimeMinutes + Math.round(this.editOffset)
             } else {
-                this.alarmTimeMinutes = lastAlarmTimeMinutes + Math.round(this.encoderOffset) * 60
+                this.alarmTimeMinutes = lastAlarmTimeMinutes + Math.round(this.editOffset) * 60
             }
 
             if (this.alarmTimeMinutes < 0) this.alarmTimeMinutes += DAY_MINUTES
@@ -115,7 +126,10 @@ export class Clock {
         })
         this.loadClockState()
 
-        this.sunrise = new Sunrise({ redPin, greenPin, bluePin, whitePin })
+        this.sunrise = new Sunrise({
+            redPin, greenPin, bluePin, whitePin,
+            pwmFrequency: PWM_FREQUENCY, pwmRange: PWM_RANGE
+        })
 
         this.checkActive()
         this.run()
@@ -123,12 +137,13 @@ export class Clock {
 
     public stop(): void {
         this.sunrise.stop()
+        this.display.clear()
         this.alarmLed.pwmWrite(0)
     }
 
     private checkActive(): void {
         const active = 1 - this.alarmButton.digitalRead()
-        this.alarmLed.pwmWrite(active * 255)
+        this.alarmLed.pwmWrite(active * PWM_RANGE)
         this.sunrise.setActive(!!active)
     }
 
@@ -187,7 +202,7 @@ export class Clock {
         this.sunrise.setSunUpTime(this.alarmTimeMinutes)
 
         // show the current alarm time
-        this.display.setTime(this.alarmTimeMinutes, this.encoderMode === 'HOURS', false, this.encoderMode === 'MINUTES')
+        this.display.setTime(this.alarmTimeMinutes, this.editMode === 'HOURS', false, this.editMode === 'MINUTES')
 
         // clear the current timeout to show the time
         if (this.showTimeTimeout !== null) clearTimeout(this.showTimeTimeout)
@@ -197,7 +212,7 @@ export class Clock {
         this.showTimeTimeout = setTimeout(() => {
             this.showTimeTimeout = null
 
-            this.encoderMode = null
+            this.editMode = null
 
             this.run()
         }, this.showAlarmDelayMs)
