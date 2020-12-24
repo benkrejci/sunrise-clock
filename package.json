@@ -1,16 +1,25 @@
 {
-  "main": "dist/index.js",
+  "name": "@benkrejci/sunrise-clock",
+  "version": "0.1.1",
+  "main": "dist/run.js",
+  "types": "dist/run.d.ts",
+  "repository": "git@github.com:benkrejci/on-air.git",
+  "author": "benkrejci",
+  "license": "MIT",
+  "scripts": {
+    "build": "yarn run tsc",
+    "prepare": "yarn run build",
+    "start": "dist/run.js"
+  },
   "dependencies": {
     "@types/node": "^14.14.14",
     "coffee-script": "^1.12.7",
     "color-convert": "^2.0.1",
+    "ht16k33-sevensegment-display": "^0.1.1",
     "lodash": "^4.17.20",
     "pigpio": "^3.2.4",
     "tiny-typed-emitter": "^2.0.3",
     "typescript-debounce-decorator": "^0.0.18"
-  },
-  "optionalDependencies": {
-    "ht16k33-sevensegment-display": "^0.1.1"
   },
   "devDependencies": {
     "@types/color-convert": "^2.0.0",

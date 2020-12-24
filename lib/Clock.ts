@@ -6,8 +6,12 @@ import Timeout = NodeJS.Timeout
 import { debounce } from './decorators'
 import pigpio, { Gpio } from 'pigpio'
 
-interface ClockState { alarmTimeMinutes?: number }
+interface ClockState {
+    alarmTimeMinutes?: number
+    displayBrightness?: number
+}
 
+const DEFAULT_DISPLAY_BRIGHTNESS = 0.2
 const DEFAULT_CLOCK_STATE_FILE_PATH = '/run/sunrise-clock-state.json'
 const DEFAULT_SHOW_ALARM_DELAY_MS = 2 * 1000
 const DEFAULT_ALARM_BUTTON_PIN = 10
@@ -42,12 +46,14 @@ export class Clock {
     private readonly alarmButton: Gpio
     private readonly alarmLed: Gpio
 
+    private displayBrightess: number = DEFAULT_DISPLAY_BRIGHTNESS
     private editMode: null | 'MINUTES' | 'HOURS' = null
     private editOffset: number = 0
     private alarmTimeMinutes: number = DEFAULT_ALARM_MINUTES
     private showTimeTimeout: Timeout | null = null
 
     constructor({
+        displayBrightness = DEFAULT_DISPLAY_BRIGHTNESS,
         clockStateFilePath = DEFAULT_CLOCK_STATE_FILE_PATH,
         showAlarmDelayMs= DEFAULT_SHOW_ALARM_DELAY_MS,
         alarmButtonPin = DEFAULT_ALARM_BUTTON_PIN,
@@ -63,6 +69,7 @@ export class Clock {
         bluePin = DEFAULT_BLUE_PIN,
         whitePin = DEFAULT_WHITE_PIN,
     }: {
+        displayBrightness?: number
         clockStateFilePath?: string
         showAlarmDelayMs?: number
         alarmButtonPin?: number
@@ -131,7 +138,7 @@ export class Clock {
             pwmFrequency: PWM_FREQUENCY, pwmRange: PWM_RANGE
         })
 
-        this.checkActive()
+        this.setDisplayBrightness(displayBrightness)
         this.run()
     }
 
@@ -141,9 +148,15 @@ export class Clock {
         this.alarmLed.pwmWrite(0)
     }
 
+    public setDisplayBrightness(zeroToOne: number): void {
+        this.displayBrightess = zeroToOne
+        this.display.setBrightness(zeroToOne)
+        this.checkActive()
+    }
+
     private checkActive(): void {
         const active = 1 - this.alarmButton.digitalRead()
-        this.alarmLed.pwmWrite(active * PWM_RANGE)
+        this.alarmLed.pwmWrite(Math.round(active * this.displayBrightess * PWM_RANGE))
         this.sunrise.setActive(!!active)
     }
 
@@ -151,11 +164,17 @@ export class Clock {
         fs.readFile(this.clockStateFilePath, 'utf8', (err, data) => {
             if (!err) {
                 try {
-                    const { alarmTimeMinutes }: ClockState = JSON.parse(data)
+                    const {
+                        alarmTimeMinutes,
+                        displayBrightness,
+                    }: ClockState = JSON.parse(data)
                     if (alarmTimeMinutes !== undefined) {
                         this.alarmTimeMinutes = alarmTimeMinutes
                         this.updateAlarmTime()
                         console.log(`Successfully loaded clock state!`)
+                    }
+                    if (displayBrightness !== undefined) {
+                        this.setDisplayBrightness(displayBrightness)
                     }
                 } catch (err) {
                     console.error(`Error parsing state file ${this.clockStateFilePath}:`, err)
@@ -166,7 +185,10 @@ export class Clock {
 
     @debounce(5 * 1000, 60 * 1000)
     private saveClockState(): void {
-        const clockState: ClockState = { alarmTimeMinutes: this.alarmTimeMinutes }
+        const clockState: ClockState = {
+            alarmTimeMinutes: this.alarmTimeMinutes,
+            displayBrightness: this.displayBrightess,
+        }
         fs.writeFile(this.clockStateFilePath, JSON.stringify(clockState), (err) => {
             if (err) {
                 console.error(`Error saving clock state file ${this.clockStateFilePath}:`, err)
