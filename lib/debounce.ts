@@ -1,6 +1,10 @@
 import Timeout = NodeJS.Timeout
 
-export function debounce(callback: Function, minDelay: number = 0, maxDelay: number | null = null): Function {
+export function debounce(
+    callback: Function,
+    minDelay: number = 0,
+    maxDelay: number | null = null,
+): Function {
     let callTimeout: Timeout | null = null
     const handler = function (this: any, args: any[]) {
         callback.apply(this, args)

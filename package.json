@@ -12,10 +12,10 @@
     "start": "dist/run.js"
   },
   "dependencies": {
-    "@types/node": "^14.14.14",
+    "bh1750_lux": "^1.0.1",
     "coffee-script": "^1.12.7",
     "color-convert": "^2.0.1",
-    "ht16k33-sevensegment-display": "^0.1.1",
+    "i2c-bus": "^5.2.1",
     "lodash": "^4.17.20",
     "pigpio": "^3.2.4",
     "tiny-typed-emitter": "^2.0.3",
@@ -23,7 +23,9 @@
   },
   "devDependencies": {
     "@types/color-convert": "^2.0.0",
+    "@types/i2c-bus": "^5.1.0",
     "@types/lodash": "^4.14.165",
+    "@types/node": "^14.14.19",
     "typescript": "^4.1.3"
   }
 }

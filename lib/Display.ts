@@ -1,13 +1,13 @@
-// @ts-ignore
-import SsDisplay from 'ht16k33-sevensegment-display'
+import { SevenSegment } from './SevenSegment'
 
-const DEFAULT_DISPLAY_ADDRESS = 0x70
+const DEFAULT_I2C_ADDRESS = 0x70
 const DEFAULT_I2C_BUS = 1
+
 const BRIGHTNESS_MAX = 15
 
 export class Display {
     private readonly use24Time: boolean
-    private readonly display: SsDisplay
+    private readonly display: SevenSegment
 
     private minutesSinceMidnight = 0
     private firstDot = false
@@ -16,36 +16,45 @@ export class Display {
 
     constructor({
         use24Time = false,
-        displayAddress = DEFAULT_DISPLAY_ADDRESS,
-        i2cBus= DEFAULT_I2C_BUS
+        i2cBus = DEFAULT_I2C_BUS,
+        i2cAddress = DEFAULT_I2C_ADDRESS,
     }: {
         use24Time?: boolean
-        displayAddress?: number
+        i2cAddress?: number
         i2cBus?: number
     } = {}) {
         this.use24Time = use24Time
-        this.display = new SsDisplay(displayAddress, i2cBus)
-        this.setBrightness(1)
-        this.display.clear()
-        this.display.setColon(true)
+        this.display = new SevenSegment(i2cBus, i2cAddress, () => {
+            this.display.clear()
+            this.display.setColon(true)
 
-        setInterval(this.paint.bind(this), 0)
-        this.paint()
+            //setInterval(this.paint.bind(this), 0)
+            this.paint()
+        })
     }
 
     public clear(): void {
         this.display.clear()
+        this.display.flush()
     }
 
-    public setTime(minutesSinceMidnight: number, firstDot = false, secondDot = false, thirdDot = false): void {
+    public setTime(
+        minutesSinceMidnight: number,
+        firstDot = false,
+        secondDot = false,
+        thirdDot = false,
+    ): void {
         this.minutesSinceMidnight = minutesSinceMidnight
         this.firstDot = firstDot
         this.secondDot = secondDot
         this.thirdDot = thirdDot
+
+        this.paint()
     }
 
     public setBrightness(zeroToOne: number): void {
-        this.display.display.setBrightness(zeroToOne * BRIGHTNESS_MAX)
+        this.display.setBrightness(Math.round(zeroToOne * BRIGHTNESS_MAX))
+        this.display.flush()
     }
 
     private paint(): void {
@@ -63,9 +72,15 @@ export class Display {
         }
         const minutes = Math.floor(this.minutesSinceMidnight % 60)
 
-        this.display.writeDigit(0, hours >= 10 ? Math.floor(hours / 10) : null, this.firstDot)
+        this.display.writeDigit(
+            0,
+            hours >= 10 ? Math.floor(hours / 10) : null,
+            this.firstDot,
+        )
         this.display.writeDigit(1, hours % 10, this.secondDot)
         this.display.writeDigit(3, Math.floor(minutes / 10), this.thirdDot)
         this.display.writeDigit(4, minutes % 10, pmDot)
+
+        this.display.flush()
     }
 }

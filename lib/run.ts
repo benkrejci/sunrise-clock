@@ -1,10 +1,15 @@
 import { Clock } from './Clock'
 
-const clock = new Clock()
+// wait a little to make sure async i2c commands go out (e.g. to clear the display)
+const STOP_DELAY_MS = 200
+
+const clock = new Clock({})
 
 function exit() {
     clock.stop()
-    process.exit(0)
+    setTimeout(() => {
+        process.exit(0)
+    }, STOP_DELAY_MS)
 }
 
 process.on('SIGTERM', () => {
@@ -12,7 +17,7 @@ process.on('SIGTERM', () => {
     exit()
 })
 
-process.on('SIGINT',  () => {
+process.on('SIGINT', () => {
     process.stdout.write('SIGINT signal received\n')
     exit()
 })

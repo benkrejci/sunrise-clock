@@ -1,10 +1,10 @@
-import { TypedEmitter } from 'tiny-typed-emitter'
 import { Gpio } from 'pigpio'
+import { TypedEmitter } from 'tiny-typed-emitter'
 
 export interface RotaryEncoderEvents {
-    rotate: (delta: number) => void,
-    press: () => void,
-    release: () => void,
+    rotate: (delta: number) => void
+    press: () => void
+    release: () => void
 }
 
 const DEFAULT_PULL = 'UP'
@@ -15,13 +15,18 @@ export class RotaryEncoder extends TypedEmitter<RotaryEncoderEvents> {
     private ccwState: 0 | 1 = 0
     private state: number = 0 // binary where LSB is ccw state and MSB is cw state
 
-    constructor(cwPin: number, ccwPin: number, buttonPin: number, {
-        pull = DEFAULT_PULL,
-        debounceDelayNs = DEFAULT_DEBOUNCE_DELAY_NS
-    }: {
-        pull?: 'UP' | 'DOWN',
-        debounceDelayNs?: number
-    } = {}) {
+    constructor(
+        cwPin: number,
+        ccwPin: number,
+        buttonPin: number,
+        {
+            pull = DEFAULT_PULL,
+            debounceDelayNs = DEFAULT_DEBOUNCE_DELAY_NS,
+        }: {
+            pull?: 'UP' | 'DOWN'
+            debounceDelayNs?: number
+        } = {},
+    ) {
         super()
 
         const onLevel = pull === 'UP' ? 0 : 1
@@ -63,7 +68,7 @@ export class RotaryEncoder extends TypedEmitter<RotaryEncoderEvents> {
         const state = (this.cwState << 1) | this.ccwState
         if (state === this.state) return
 
-        const transition = (this.state << 2 ) | state
+        const transition = (this.state << 2) | state
         this.state = state
 
         const delta = this.getDeltaFromTransitionState(transition)
@@ -72,9 +77,19 @@ export class RotaryEncoder extends TypedEmitter<RotaryEncoderEvents> {
     }
 
     private getDeltaFromTransitionState(transition: number): number {
-        if (transition === 0b0010 || transition === 0b0100 || transition === 0b1011 || transition === 0b1101) {
+        if (
+            transition === 0b0010 ||
+            transition === 0b0100 ||
+            transition === 0b1011 ||
+            transition === 0b1101
+        ) {
             return 1
-        } else if (transition === 0b0001 || transition === 0b0111 || transition === 0b1000 || transition === 1110) {
+        } else if (
+            transition === 0b0001 ||
+            transition === 0b0111 ||
+            transition === 0b1000 ||
+            transition === 1110
+        ) {
             return -1
         } else {
             return 0
