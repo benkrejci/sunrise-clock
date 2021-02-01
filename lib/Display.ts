@@ -28,7 +28,6 @@ export class Display {
             this.display.clear()
             this.display.setColon(true)
 
-            //setInterval(this.paint.bind(this), 0)
             this.paint()
         })
     }

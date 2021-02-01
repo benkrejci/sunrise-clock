@@ -4,8 +4,7 @@ import pigpio, { Gpio } from 'pigpio'
 import { Ambient } from './Ambient'
 import { debounce } from './decorators'
 import { Display } from './Display'
-import { Light, Rgbw } from './Light'
-import { LightSensor } from './LightSensor'
+import { LightController, Rgbw } from './LightController'
 import { RotaryEncoder } from './RotaryEncoder'
 import { Sunrise } from './Sunrise'
 
@@ -26,16 +25,13 @@ const DEFAULT_CLOCK_STATE_FILE_PATH = '/var/lib/sunrise-clock-state.json'
 const DEFAULT_SHOW_ALARM_DELAY_MS = 2 * 1000
 const DEFAULT_ROTARY_SPEED = 1 / 3
 const DEFAULT_ALARM_MINUTES = 10 * 60
-const DEFAULT_RED_PIN = 27
-const DEFAULT_GREEN_PIN = 17
-const DEFAULT_BLUE_PIN = 22
-const DEFAULT_WHITE_PIN = 23
 const DEFAULT_ENCODER_MODE = 'MINUTES'
 
 const BUTTON_DEBOUNCE_NS = 100 * 1000
 const DAY_MINUTES = 60 * 24
 const ACTIVE_LED_MIN_BRIGHTNESS = 0.02
-const DISPLAY_BRIGHTNESS_SCALE = 0.3
+const DISPLAY_BRIGHTNESS_SCALE = 1
+const DISPLAY_GAMMA_POW = 2.2
 
 // the following values are taken from this table: https://github.com/fivdi/pigpio/blob/master/doc/gpio.md#pwmrangerange
 // they are chosen so as to maximize color resolution and minimize flicker
@@ -50,9 +46,8 @@ export class Clock {
     private readonly showAlarmDelayMs: number
     private readonly display: Display
     private readonly sunrise: Sunrise
-    private readonly light: Light
     private readonly ambient?: Ambient
-    private readonly lightSensor?: LightSensor
+    private readonly lightController: LightController
     private readonly alarmButton: Gpio
     private readonly alarmLed?: Gpio
 
@@ -65,15 +60,11 @@ export class Clock {
     constructor({
         i2cBus,
         displayAddress,
-        lightSensorAddress,
+        lightControllerAddress,
         rotaryCwPin = DEFAULT_ROTARY_CW_PIN,
         rotaryCcwPin = DEFAULT_ROTARY_CCW_PIN,
         rotaryButtonPin = DEFAULT_ROTARY_BUTTON_PIN,
         rotarySpeed = DEFAULT_ROTARY_SPEED,
-        redPin = DEFAULT_RED_PIN,
-        greenPin = DEFAULT_GREEN_PIN,
-        bluePin = DEFAULT_BLUE_PIN,
-        whitePin = DEFAULT_WHITE_PIN,
         alarmButtonPin = DEFAULT_ALARM_BUTTON_PIN,
         alarmLedPin = DEFAULT_ALARM_LED_PIN,
         ambientTogglePin = DEFAULT_AMBIENT_TOGGLE_PIN,
@@ -83,7 +74,7 @@ export class Clock {
     }: {
         i2cBus?: number
         displayAddress?: number
-        lightSensorAddress?: number | null
+        lightControllerAddress?: number
         rotaryCwPin?: number
         rotaryCcwPin?: number
         rotaryButtonPin?: number
@@ -156,68 +147,60 @@ export class Clock {
         })
         this.loadClockState()
 
-        this.light = new Light({
-            redPin,
-            greenPin,
-            bluePin,
-            whitePin,
-            pwmFrequency: PWM_FREQUENCY,
-            pwmRange: PWM_RANGE,
+        this.lightController = new LightController({
+            i2cBus,
+            i2cAddress: lightControllerAddress,
         })
-
-        if (lightSensorAddress === null) {
-            this.lightSensor = undefined
-            this.setDisplayBrightness(displayBrightness)
-        } else {
-            this.lightSensor = new LightSensor({
-                i2cBus,
-                i2cAddress: lightSensorAddress,
-            })
-            this.lightSensor.on(
-                'update',
-                this.updateDisplayBrightness.bind(this),
-            )
-        }
+        this.lightController.on(
+            'update.brightness',
+            this.updateDisplayBrightness.bind(this),
+        )
 
         const updateLight = () => {
             const rgbw: Rgbw = this.ambient?.getIsOn()
                 ? this.ambient.getRgbw()
                 : this.sunrise.getRgbw()
-            this.light.setRgbw(rgbw)
+            this.lightController.setRgbw(rgbw)
         }
 
-        this.sunrise = new Sunrise({})
+        this.sunrise = new Sunrise({ autoRun: false })
         this.sunrise.on('update', updateLight)
 
         if (ambientTogglePin !== null) {
             this.ambient = new Ambient({
                 togglePin: ambientTogglePin,
-                lightSensor: this.lightSensor,
+                lightSensor: this.lightController,
             })
             this.ambient.on('update', updateLight)
         }
 
-        this.updateDisplayBrightness()
-        this.run()
+        this.lightController.ready(() => {
+            this.sunrise.run()
+            this.updateDisplayBrightness()
+            this.run()
+        })
     }
 
     public stop(): void {
-        this.lightSensor?.stop()
+        this.lightController?.stop()
         this.sunrise.stop()
         this.display.clear()
         this.alarmLed?.pwmWrite(0)
     }
 
     private updateDisplayBrightness(): void {
-        if (!this.lightSensor) return
-        this.setDisplayBrightness(this.lightSensor.getBrightness())
+        if (!this.lightController) return
+        this.setDisplayBrightness(
+            this.lightController.getBrightnessLevels().cumulative,
+        )
     }
 
     private setDisplayBrightness(zeroToOne: number): void {
         this.displayBrightess = zeroToOne
-        this.display.setBrightness(
-            DISPLAY_BRIGHTNESS_SCALE * this.displayBrightess,
-        )
+        const brightness =
+            DISPLAY_BRIGHTNESS_SCALE *
+            Math.pow(this.displayBrightess, DISPLAY_GAMMA_POW)
+        this.display.setBrightness(brightness)
         this.updateActive()
     }
 

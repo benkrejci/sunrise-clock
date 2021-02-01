@@ -1,8 +1,8 @@
+import _ from 'lodash'
 import { Gpio } from 'pigpio'
 import { TypedEmitter } from 'tiny-typed-emitter'
 
-import { linearColor, Rgbw, RGBW_BRIGHT, RGBW_OFF } from './Light'
-import { LightSensor } from './LightSensor'
+import { LightController, linearColor, Rgbw, RGBW_BRIGHT, RGBW_OFF } from './LightController'
 
 interface AmbientEvents {
     update: (isOn: boolean, rgbw: Rgbw) => void
@@ -17,7 +17,7 @@ const TOGGLE_DEBOUNCE_NS = 10 * 1000
 // 3. toggle initiated
 // 4. <IGNORE_MS passes
 // 5. button is released (ignored)
-const TOGGLE_IGNORE_DELAY_MS = 500
+const TOGGLE_IGNORE_DELAY_MS = 300
 
 interface BrightnessRgbw {
     brightness: number
@@ -39,14 +39,14 @@ const BRIGHTNESS_LEVELS: Array<BrightnessRgbw> = [
     },
     DEFAULT_BRIGHTNESS_LEVEL,
     {
-        brightness: 0.5,
+        brightness: 1,
         rgbw: RGBW_BRIGHT,
     },
 ]
 
 export class Ambient extends TypedEmitter<AmbientEvents> {
     private readonly toggleInput: Gpio
-    private readonly lightSensor?: LightSensor
+    private readonly lightSensor?: LightController
 
     private isOn: boolean = false
     private rgbw: Rgbw = RGBW_OFF
@@ -57,11 +57,14 @@ export class Ambient extends TypedEmitter<AmbientEvents> {
         lightSensor,
     }: {
         togglePin: number
-        lightSensor?: LightSensor
+        lightSensor?: LightController
     }) {
         super()
 
         this.lightSensor = lightSensor
+        this.lightSensor?.on('update.brightness', (brightness) => {
+            this.update()
+        })
 
         this.toggleInput = new Gpio(togglePin, {
             mode: Gpio.INPUT,
@@ -86,16 +89,24 @@ export class Ambient extends TypedEmitter<AmbientEvents> {
         this.lastToggle = now
 
         this.isOn = !this.isOn
+        this.update()
+    }
+
+    private update(): void {
+        let rgbw: Rgbw
         if (this.isOn) {
             if (this.lightSensor) {
-                this.rgbw = Ambient.calculateRgbw(
-                    this.lightSensor.getBrightness(),
-                )
+                const brightness = this.lightSensor.getBrightnessLevels()
+                    .ambient
+                rgbw = Ambient.calculateRgbw(brightness)
             } else {
-                this.rgbw = DEFAULT_BRIGHTNESS_LEVEL.rgbw
+                rgbw = DEFAULT_BRIGHTNESS_LEVEL.rgbw
             }
-        } else this.rgbw = RGBW_OFF
-        this.updated()
+        } else rgbw = RGBW_OFF
+        if (!_.isEqual(this.rgbw, rgbw)) {
+            this.rgbw = rgbw
+            this.updated()
+        }
     }
 
     private updated(): void {

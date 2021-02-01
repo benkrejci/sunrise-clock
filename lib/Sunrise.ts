@@ -1,7 +1,7 @@
 import { TypedEmitter } from 'tiny-typed-emitter'
 
 import { debounce } from './decorators'
-import { linearColor, Rgbw, RGBW_BRIGHT, RGBW_OFF } from './Light'
+import { linearColor, Rgbw, RGBW_BRIGHT, RGBW_OFF } from './LightController'
 
 import Timeout = NodeJS.Timeout
 
@@ -45,8 +45,10 @@ export class Sunrise extends TypedEmitter<SunriseEvents> {
 
     constructor({
         rgbwKeyframes = RGBW_KEYFRAMES,
+        autoRun = true,
     }: {
         rgbwKeyframes?: RgbwKeyframe[]
+        autoRun?: boolean
     }) {
         super()
 
@@ -60,7 +62,17 @@ export class Sunrise extends TypedEmitter<SunriseEvents> {
             else this.sunSetDurationMinutes += frame.duration
         })
 
-        this.run()
+        if (autoRun) this.run()
+    }
+
+    public run(): void {
+        this.paint()
+
+        // update at top of the second
+        const now = new Date()
+        this.runTimeout = setTimeout(() => {
+            this.run()
+        }, 1000 - now.getMilliseconds())
     }
 
     public stop() {
@@ -86,16 +98,6 @@ export class Sunrise extends TypedEmitter<SunriseEvents> {
         if (rgbw.every((value, index) => value === this.rgbw[index])) return
         this.rgbw = rgbw
         this.emit('update', rgbw)
-    }
-
-    private run(): void {
-        this.paint()
-
-        // update at top of the second
-        const now = new Date()
-        this.runTimeout = setTimeout(() => {
-            this.run()
-        }, 1000 - now.getMilliseconds())
     }
 
     @debounce(PAINT_DEBOUNCE_MIN_DELAY_MS, PAINT_DEBOUNCE_MAX_DELAY_MS)

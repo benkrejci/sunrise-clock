@@ -123,7 +123,7 @@ export class Backpack extends EventEmitter {
     public writeDisplay(): Promise<void> {
         debug(`writing buffer to display...`)
 
-        var bytes = new Buffer(UINT16_BUFFER_SIZE * 2), // Create a UINT8 buffer for writing to the display
+        var bytes = Buffer.alloc(UINT16_BUFFER_SIZE * 2), // Create a UINT8 buffer for writing to the display
             i = 0
         this.buffer.forEach((item) => {
             // bytes[i++] = (item & 0xFF);
