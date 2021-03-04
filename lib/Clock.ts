@@ -4,7 +4,7 @@ import pigpio, { Gpio } from 'pigpio'
 import { Ambient } from './Ambient'
 import { debounce } from './decorators'
 import { Display } from './Display'
-import { LightController, Rgbw } from './LightController'
+import { LightController, Rgbw, RGBW_OFF } from './LightController'
 import { RotaryEncoder } from './RotaryEncoder'
 import { Sunrise } from './Sunrise'
 
@@ -169,12 +169,14 @@ export class Clock {
         if (ambientTogglePin !== null) {
             this.ambient = new Ambient({
                 togglePin: ambientTogglePin,
-                lightSensor: this.lightController,
+                lightController: this.lightController,
             })
             this.ambient.on('update', updateLight)
         }
 
         this.lightController.ready(() => {
+            this.lightController.setRgbw(RGBW_OFF)
+
             this.sunrise.run()
             this.updateDisplayBrightness()
             this.run()

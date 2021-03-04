@@ -46,7 +46,7 @@ const BRIGHTNESS_LEVELS: Array<BrightnessRgbw> = [
 
 export class Ambient extends TypedEmitter<AmbientEvents> {
     private readonly toggleInput: Gpio
-    private readonly lightSensor?: LightController
+    private readonly lightController?: LightController
 
     private isOn: boolean = false
     private rgbw: Rgbw = RGBW_OFF
@@ -54,15 +54,15 @@ export class Ambient extends TypedEmitter<AmbientEvents> {
 
     constructor({
         togglePin,
-        lightSensor,
+        lightController,
     }: {
         togglePin: number
-        lightSensor?: LightController
+        lightController?: LightController
     }) {
         super()
 
-        this.lightSensor = lightSensor
-        this.lightSensor?.on('update.brightness', (brightness) => {
+        this.lightController = lightController
+        this.lightController?.on('update.brightness', (brightness) => {
             this.update()
         })
 
@@ -89,14 +89,17 @@ export class Ambient extends TypedEmitter<AmbientEvents> {
         this.lastToggle = now
 
         this.isOn = !this.isOn
-        this.update()
+
+        this.lightController?.setAmbientEnabled(this.isOn).then(() => {
+            this.update()
+        })
     }
 
     private update(): void {
         let rgbw: Rgbw
         if (this.isOn) {
-            if (this.lightSensor) {
-                const brightness = this.lightSensor.getBrightnessLevels()
+            if (this.lightController) {
+                const brightness = this.lightController.getBrightnessLevels()
                     .ambient
                 rgbw = Ambient.calculateRgbw(brightness)
             } else {
